@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>PM 3.0</title>
+		<link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css"> 
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+        <script src="functions.js"></script>
+		<script src="index.js"></script>
+		<link rel="stylesheet" href="style.css">
+    </head>
+    <body class="bg-primary">
+		<div class="w3-sidebar w3-bar-block w3-border-right w3-dark-gray w3-animate-left" style="display: none;" id="linkSidebar">
+			<button onclick="w3_close()" class="w3-bar-item w3-large">&times;</button>
+			<a href="index.html" class="w3-bar-item w3-button">Home</a>
+			<a id="SettingsButID" href="options.html" class="w3-bar-item w3-button">Settings</a>
+			<a id="LoginButID" href="login.html" class="w3-bar-item w3-button">Log in</a>
+		</div>
+		
+		<div class="w3-display-container">
+			<div class="w3-container header_class">
+				<h1><button class="w3-button w3-blue-gray w3-xlarge" onclick="w3_open()">☰</button> HOME PAGE:</h1>
+			</div>
+
+			<div id="AddEntryDiv" class="w3-display-container">
+
+			</div>
+
+			<div id="EntryContainer" class="w3-container w3-padding-16">
+
+			</div>
+			
+			<div class="w3-container w3-right">
+				<button class="w3-button w3-large w3-circle w3-xlarge w3-ripple w3-green" onclick="addNewEntryDialogue()">
+					<i class="fa fa-plus"></i>
+				</button>
+			</div>
+		</div>
+
+    </body>
+</html>

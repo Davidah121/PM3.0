@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>PM 3.0</title>
+		<link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css"> 
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+		<link rel="stylesheet" href="style.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+        <script src="functions.js"></script>
+		<script src="login.js"></script>
+    </head>
+    <body class="bg-primary">
+
+		<div class="w3-sidebar w3-bar-block w3-border-right w3-dark-gray w3-animate-left" style="display: none;" id="linkSidebar">
+			<button onclick="w3_close()" class="w3-bar-item w3-large">&times;</button>
+			<a href="index.html" class="w3-bar-item w3-button">Home</a>
+			<a id="SettingsButID" href="options.html" class="w3-bar-item w3-button">Settings</a>
+			<a id="LoginButID" href="login.html" class="w3-bar-item w3-button">Log in</a>
+		</div>
+
+			<div class="w3-display-container content_class">
+				<div class="w3-container header_class">
+					<h1><button class="w3-button w3-blue-gray w3-xlarge" onclick="w3_open()">☰</button> LOGIN PAGE:</h1>
+				</div>
+				<div class="w3-container">
+					<div class="w3-container">
+						<label class="w3-third" for="username">Username:</label>
+						<input class="w3-input w3-round w3-twothird" id="usernameID" type="text" id="username" name="username" value="">
+					</div>
+					<br><br>
+					
+					<div class="w3-container w3-row">
+						<label class="w3-third" for="password">Password:</label>
+						<div class="w3-display-container w3-twothird">
+							<input class="w3-input w3-round" id="passwordID" type="password" id="password" name="password" value="">
+							<button class="w3-btn w3-round w3-ripple w3-display-bottomright w3-text-black" style="height: 100%" onclick="togglePasswordVisibility()"><i class="fa fa-eye"></i></button>
+						</div>
+					</div>
+					<br><br>
+					<input class="w3-button w3-large button_color w3-round" type="submit" value="Login" onclick="attemptLogin()">
+					<input class="w3-button w3-large button_color w3-round" type="submit" value="CreateAccount" onclick="attemptCreateAccount()">
+					<br><br>
+				</div>
+			</div>
+    </body>
+</html>

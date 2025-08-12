@@ -1,0 +1,85 @@
+/** Generated using colorffy.com */
+
+:root{
+	/** Base colors */
+	--clr-dark-a0: #000000;
+	--clr-light-a0: #ffffff;
+
+	/** Theme primary colors */
+	--clr-primary-a0: #2a5cc7;
+	--clr-primary-a10: #4e6cce;
+	--clr-primary-a20: #687dd4;
+	--clr-primary-a30: #808edb;
+	--clr-primary-a40: #96a0e1;
+	--clr-primary-a50: #acb2e7;
+
+	/** Theme surface colors */
+	--clr-surface-a0: #121212;
+	--clr-surface-a10: #282828;
+	--clr-surface-a20: #3f3f3f;
+	--clr-surface-a30: #575757;
+	--clr-surface-a40: #717171;
+	--clr-surface-a50: #8b8b8b;
+
+	/** Theme tonal surface colors */
+	--clr-surface-tonal-a0: #181922;
+	--clr-surface-tonal-a10: #2d2e37;
+	--clr-surface-tonal-a20: #44444d;
+	--clr-surface-tonal-a30: #5c5c64;
+	--clr-surface-tonal-a40: #75757c;
+	--clr-surface-tonal-a50: #8f8f94;
+}
+
+/** Examples */
+.bg-primary {
+ color: var(--clr-primary-a50);
+ background-color: var(--clr-surface-a0);
+}
+
+textarea {
+	resize: none;
+	font-size: x-large;
+}
+
+input[type=text] {
+	font-size: x-large;
+}
+
+input[type=password] {
+	font-size: x-large;
+}
+
+label {
+	font-size: x-large;
+}
+
+.w3-input {
+	text-decoration-line: none;
+	border: none;
+}
+
+.input_css_container {
+	border-bottom: 1px solid #ccc;
+	padding: 0px;
+}
+.input_css_container_noline {
+	padding: 0px;
+}
+
+.content_class{
+	color: var(--clr-light-a0);
+}
+.header_class{
+	padding: 0;
+	color: var(--clr-light-a0);
+	background-color: var(--clr-surface-tonal-a10);
+}
+
+.button_color {
+	background-color: var(--clr-primary-a20);
+}
+
+.entry_class {
+	color: var(--clr-light-a0);
+	background-color: var(--clr-surface-a20);
+}

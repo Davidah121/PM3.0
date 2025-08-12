@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>PM 3.0</title>
+		<link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css"> 
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+        <script src="functions.js"></script>
+		<script src="options.js"></script>
+		<link rel="stylesheet" href="style.css">
+    </head>
+    <body class="bg-primary">
+		
+		<div class="w3-sidebar w3-bar-block w3-border-right w3-dark-gray w3-animate-left" style="display: none;" id="linkSidebar">
+			<button onclick="w3_close()" class="w3-bar-item w3-large">&times;</button>
+			<a href="index.html" class="w3-bar-item w3-button">Home</a>
+			<a id="SettingsButID" href="options.html" class="w3-bar-item w3-button">Settings</a>
+			<a id="LoginButID" href="login.html" class="w3-bar-item w3-button">Log in</a>
+		</div>
+
+		<div class="w3-display-container content_class">
+			<div class="w3-container header_class">
+				<h1><button class="w3-button w3-blue-gray w3-xlarge" onclick="w3_open()">☰</button> Account Options:</h1>
+			</div>
+			<div class="w3-container">
+				<h1 id="UsernameHeaderID">Hello INSERT NAME</h1>
+				<div class="w3-container">
+					<!--Change password-->
+					<div class="w3-container w3-row">
+						<label class="w3-input w3-third">Old Password</label>
+						<input id="OldPasswordBox", class="w3-input w3-twothird" type="text">
+					</div>
+					<br>
+					<div class="w3-container w3-row">
+						<label class="w3-input w3-third">New Password</label>
+						<input id="NewPasswordBox", class="w3-input w3-twothird" type="text">
+					</div>
+					<br><br><br>
+					<button class="w3-button w3-round button_color w3-right" onclick="attemptChangePassword()">Change Password</button>
+				</div>
+			</div>
+		</div>
+		
+		<button class="w3-button w3-ripple w3-round w3-green w3-display-bottomright" onclick="attemptLogout()">Log out</button>
+		<button class="w3-button w3-ripple w3-round w3-red w3-display-bottomleft" onclick="attemptDeleteAccount()">Delete Account</button>
+    </body>
+</html>
