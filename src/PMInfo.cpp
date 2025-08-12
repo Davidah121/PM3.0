@@ -4,6 +4,21 @@
 #include "EncryptWrapper.h"
 
 
+std::string escapeLineBreaks(std::string s)
+{
+	std::string output;
+	for(char c : s)
+	{
+		if(c == '\n')
+		{
+			output += "\\n";
+		}
+		else
+			output += c;
+	}
+	return output;
+}
+
 std::string PMDatabase::getCurrentDate()
 {
 	time_t currentTime = time(nullptr);
@@ -42,7 +57,7 @@ std::string PMDatabase::convertEntryToJSON(PMInfo* entry)
 		temp += "\t\"Password\": \"" + entry->Password + "\",\n";
 		temp += "\t\"Date-Created\": \"" + entry->DateCreated + "\",\n";
 		temp += "\t\"Date-Updated\": \"" + entry->DateUpdated + "\",\n";
-		temp += "\t\"Description\": \"" + entry->Description + "\"\n";
+		temp += "\t\"Description\": \"" + escapeLineBreaks(entry->Description) + "\"\n";
 		temp += "}";
 		return temp;
 	}
@@ -141,7 +156,7 @@ bool PMDatabase::save(smpl::File outputFile, std::string password)
 			resultStr += "\t\t\t\"Password\": \"" + c.second->Password + "\",\n";
 			resultStr += "\t\t\t\"Date-Created\": \"" + c.second->DateCreated + "\",\n";
 			resultStr += "\t\t\t\"Date-Updated\": \"" + c.second->DateUpdated + "\",\n";
-			resultStr += "\t\t\t\"Description\": \"" + c.second->Description + "\"\n";
+			resultStr += "\t\t\t\"Description\": \"" + escapeLineBreaks(c.second->Description) + "\"\n";
 
 			resultStr += "\t\t}";
 		}
