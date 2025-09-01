@@ -45,47 +45,119 @@ There is no "Are you sure?" feature so make sure you are careful where you tap o
 
 # API Interface
 It is possible to interface with the password manager entirely using curl or any other tool that allows you to send HTTP messages.
+Note that the "..." section means continued information in the same format that may or may not exist
 
 These are the allowed GET Requests:
 - /api/list_all_entries
   - Returns all entries for the user as a JSON
   - Requires a valid session cookie passed along
-- /api/get_user_info
-  - Returns the information about the user as a JSON
-  - Requires a valid session cookie passed along
-
 ```JSON
 {
   [
     {
-      Name: "Entry1"
+      "Name": "EntryName",
+      "Username": "USERNAME",
+      "Password": "PASSWORD",
+      "Date-Created": "TIME",
+      "Date-Updated": "UpdateTime",
+      "Description": "INSERT DESCRIPTION"
     },
-    {
-      Name: "Entry2"
-    }
+    ...
   ]
 }
 ```
+
+- /api/get_user_info
+  - Returns the information about the user as a JSON
+  - Requires a valid session cookie passed along
+```JSON
+{
+  "Username": "USERNAME"
+}
+```
+
 These are the allowed POST Requests:
 - /api/login
   - Attempts to login using the given username and password provided in JSON format
   - On success, provides a session key as a cookie
+```JSON
+{
+  "Username": "USERNAME",
+  "Password": "PASSWORD"
+}
+```
+
 - /api/create_account
   - Attempts to create an account using the given username and password provided in JSON format
   - Same format as the login JSON format
   - On success, provides a session key as a cookie
+```JSON
+{
+  "Username": "USERNAME",
+  "Password": "PASSWORD"
+}
+```
+
 - /api/logout
   - Attempts to logout using the session key passed as a cookie
 - /api/delete_account
   - Attempts to delete an account using the session key passed as a cookie
 - /api/add_entry
   - Attempts to add a new entry using the session key passed as a cookie and a JSON of the entry fields
+```JSON
+{
+  "Name": "EntryName",
+  "Username": "USERNAME",
+  "Password": "PASSWORD",
+  "Description": "INSERT DESCRIPTION"
+}
+```
+
 - /api/delete_entry
   - Attempts to delete an entry using the session key passed as a cookie and a JSON of the entry fields.
   - Only the name of the entry is needed
+```JSON
+{
+  "Name": "EntryName"
+}
+```
 - /api/import_entries
   - Attempts to import a JSON of entries using the session key passed as a cookie
   - Must be formatted in the same way add_entry expects a single entry to be formatted
+```JSON
+{
+  [
+    {
+      "Name": "EntryName",
+      "Username": "USERNAME",
+      "Password": "PASSWORD",
+      "Date-Created": "TIME",
+      "Date-Updated": "UpdateTime",
+      "Description": "INSERT DESCRIPTION"
+    },
+    ...
+  ]
+}
+```
 - /api/change_password
   - Attempts to change the password of the account using the session key passed as a cookie and the passwords passed in JSON format
+```JSON
+{
+  "OldPassword": "INPUT",
+  "NewPassword": "INPUT"
+}
+```
 
+# IMPORTANT USAGE NOTICE
+By default upon compiling, PM3.0 will NOT encrypt any user info. In order to encrypt that information, you MUST implement/override the EncryptWrapper class functions. This allows anyone to use whatever encryption methods they desire.
+I use my own personal closed source encryption but ideally, use AES or something more advanced.
+
+You can use the password manager as is but the raw files that do store a user's database of sensitive information will be readable directly
+from anyone who has access to the server instead of just the user.
+
+Note that this is separate from using HTTPs over HTTP. HTTPs is not forced nor is it required but just like adding encryption for the users' files, this too is just as important.
+
+Do not expect that this application alone is the best solution securing your passwords but it is a start. User information is not backed up nor does a undo button exist so a user is responsible for making sure they don't remove important
+information by accident and the server manager is responsible for making sure user information is backed up accordingly.
+
+Simply using any external application to make multiple copies can be enough provided its across multiple drives and/or systems
