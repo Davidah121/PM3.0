@@ -890,12 +890,21 @@ void sanityCheck(NetworkConfig& netConfigRef, int& threadsForServer, std::string
 	}
 }
 
+void createUserInfoDir()
+{
+	if(!SimpleDir::doesExist("user_info"))
+	{
+		SimpleDir::createDirectory("user_info");
+	}
+}
+
 int main(int argc, char** argv)
 {
 	NetworkConfig config;
 	int threadsForServer = 2;
 	std::string certFile, keyFile;
 
+	createUserInfoDir();
 	readConfigFile(config, threadsForServer, certFile, keyFile);
 	sanityCheck(config, threadsForServer, certFile, keyFile);
 	isSecure = config.secure;
