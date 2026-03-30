@@ -1,23 +1,6 @@
 #include "PMInfo.h"
 #include <SimpleFile.h>
-#include <ctime>
 #include "EncryptWrapper.h"
-
-
-std::string escapeLineBreaks(std::string s)
-{
-	std::string output;
-	for(char c : s)
-	{
-		if(c == '\n')
-		{
-			output += "\\n";
-		}
-		else
-			output += c;
-	}
-	return output;
-}
 
 std::string PMDatabase::getCurrentDate()
 {
@@ -51,13 +34,14 @@ std::string PMDatabase::convertEntryToJSON(PMInfo* entry)
 {
 	if(entry)
 	{
+		//parsing this way since this automatically handles escape codes but does not need to create memory to work
 		std::string temp = "{\n";
-		temp += "\t\"Name\": \"" + entry->Name + "\",\n";
-		temp += "\t\"Username\": \"" + entry->Username + "\",\n";
-		temp += "\t\"Password\": \"" + entry->Password + "\",\n";
-		temp += "\t\"Date-Created\": \"" + entry->DateCreated + "\",\n";
-		temp += "\t\"Date-Updated\": \"" + entry->DateUpdated + "\",\n";
-		temp += "\t\"Description\": \"" + escapeLineBreaks(entry->Description) + "\"\n";
+		temp += smpl::JPair("Name", entry->Name).getString(false, true, "\t");
+		temp += smpl::JPair("Username", entry->Username).getString(false, true, "\t");
+		temp += smpl::JPair("Password", entry->Password).getString(false, true, "\t");
+		temp += smpl::JPair("Date-Created", entry->DateCreated).getString(false, true, "\t");
+		temp += smpl::JPair("Date-Updated", entry->DateUpdated).getString(false, true, "\t");
+		temp += smpl::JPair("Description", entry->Description).getString(true, true, "\t");
 		temp += "}";
 		return temp;
 	}
@@ -151,12 +135,12 @@ bool PMDatabase::save(smpl::File outputFile, std::string password)
 		{
 			resultStr += "\t\t{\n";
 
-			resultStr += "\t\t\t\"Name\": \"" + c.second->Name + "\",\n";
-			resultStr += "\t\t\t\"Username\": \"" + c.second->Username + "\",\n";
-			resultStr += "\t\t\t\"Password\": \"" + c.second->Password + "\",\n";
-			resultStr += "\t\t\t\"Date-Created\": \"" + c.second->DateCreated + "\",\n";
-			resultStr += "\t\t\t\"Date-Updated\": \"" + c.second->DateUpdated + "\",\n";
-			resultStr += "\t\t\t\"Description\": \"" + escapeLineBreaks(c.second->Description) + "\"\n";
+			resultStr += smpl::JPair("Name", c.second->Name).getString(false, true, "\t\t\t");
+			resultStr += smpl::JPair("Username", c.second->Username).getString(false, true, "\t\t\t");
+			resultStr += smpl::JPair("Password", c.second->Password).getString(false, true, "\t\t\t");
+			resultStr += smpl::JPair("Date-Created", c.second->DateCreated).getString(false, true, "\t\t\t");
+			resultStr += smpl::JPair("Date-Updated", c.second->DateUpdated).getString(false, true, "\t\t\t");
+			resultStr += smpl::JPair("Description", c.second->Description).getString(true, true, "\t\t\t");
 
 			resultStr += "\t\t}";
 		}
@@ -197,8 +181,7 @@ bool PMDatabase::load(smpl::File inputFile, std::string password)
 		if(originalData.empty())
 			return false;
 		
-		smpl::SimpleJSON json = smpl::SimpleJSON();
-		json.load(originalData.data(), originalData.size());
+		smpl::SimpleJSON json = smpl::SimpleJSON(originalData.data(), originalData.size());
 		loadAllEntries(json);
 
 		return true;
@@ -209,15 +192,15 @@ bool PMDatabase::load(smpl::File inputFile, std::string password)
 
 void PMDatabase::loadAllEntries(smpl::SimpleJSON& jsonData)
 {
-	std::vector<smpl::JNode*> nodesFound = jsonData.getNodesPattern({"Entries"}, 0);
+	std::vector<smpl::JNode*> nodesFound = jsonData.getNodesPattern({"Entries"});
 	if(nodesFound.size() == 1)
 	{
-		if(nodesFound.front()->getType() == smpl::SimpleJSON::TYPE_ARRAY)
+		if(nodesFound.front()->getType() == smpl::JArray::TYPE)
 		{
 			std::vector<smpl::JNode*> allChildNodes = ((smpl::JArray*)nodesFound.front())->getNodes();
 			for(smpl::JNode* childNode : allChildNodes)
 			{
-				if(childNode->getType() == smpl::SimpleJSON::TYPE_OBJECT)
+				if(childNode->getType() == smpl::JObject::TYPE)
 				{
 					loadIndividualEntry((smpl::JObject*)childNode);
 				}
@@ -252,7 +235,7 @@ bool PMDatabase::loadPairFromEntry(smpl::JObject* entryObject, std::string pairN
 	auto pair = entryObject->getNodesPattern({pairName});
 	if(!pair.empty())
 	{
-		if(pair.front()->getType() == smpl::SimpleJSON::TYPE_PAIR)
+		if(pair.front()->getType() == smpl::JPair::TYPE)
 			outputValue = ((smpl::JPair*)pair.front())->getValue();
 		else
 			return false;

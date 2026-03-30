@@ -29,23 +29,23 @@ std::string secureOption = "";
  */
 
 /*
-	SeparateFileContaining access hash: "Base64Hash"
-	Password provided + info from server gives final output (double encrypt. Server side decrypt -> user side decrypt)
+	File name = {USERNAME}_PMDatabase.json
+	Entire file encrypted
     File format:
         {
             "Entries": [
                 {
                     "Name": "INSERT NAME",
-                    "Username": "Encrypted USERNAME",
-                    "Password": "Encrypted PASSWORD",
+                    "Username": "USERNAME",
+                    "Password": "PASSWORD",
                     "Date-Created": "TIME",
                     "Date-Updated": "UpdateTime",
                     "Description": "INSERT DESCRIPTION"
                 },
                 {
                     "Name": "INSERT NAME",
-                    "Username": "Encrypted USERNAME",
-                    "Password": "Encrypted PASSWORD",
+                    "Username": "USERNAME",
+                    "Password": "PASSWORD",
                     "Date-Created": "TIME",
                     "Date-Updated": "UpdateTime",
                     "Description": "INSERT DESCRIPTION"
@@ -63,7 +63,7 @@ struct UserInfo
 	std::string pass;
 };
 
-std::unordered_map<std::string, UserInfo> accessTokens;
+SimpleHashMap<std::string, UserInfo> accessTokens;
 
 PCG pcg = PCG(time(nullptr));
 
@@ -89,7 +89,7 @@ bool extractJSONPairInfo(std::vector<JNode*> possibleNode, std::string& output)
 {
 	if(possibleNode.size() != 0)
 	{
-		if(possibleNode.front()->getType() == SimpleJSON::TYPE_PAIR)
+		if(possibleNode.front()->getType() == JPair::TYPE)
 		{
 			output = ((JPair*)possibleNode.front())->getValue();
 			return true;
@@ -130,17 +130,10 @@ int attemptToCreateAccount(std::string user, std::string pass)
 	return 0;
 }
 
-void updateTokenExpiration(std::string s)
+void updateTokenExpiration(SimpleHashMap<std::string, UserInfo>::Iterator it)
 {
-	mutex.lock();
 	//update the token expiration date
-	auto it = accessTokens.find(s);
-	if(it != accessTokens.end())
-	{
-		if(System::getCurrentTimeMillis() < it->second.expireTime)
-			it->second.expireTime = System::getCurrentTimeMillis() + TOKEN_EXPIRE_TIME;
-	}
-	mutex.unlock();
+	it->second.expireTime = System::getCurrentTimeMillis() + TOKEN_EXPIRE_TIME;
 }
 
 void quickLogout(std::string s)
@@ -152,7 +145,7 @@ void quickLogout(std::string s)
 
 void forceLogout(std::string username)
 {
-	std::unordered_map<std::string, UserInfo> newMap;
+	SimpleHashMap<std::string, UserInfo> newMap;
 	for(auto& tokenPair : accessTokens)
 	{
 		if(tokenPair.second.username == username)
@@ -185,76 +178,76 @@ void changePasswordAndForceLogout(std::string token, std::string newHashedPass)
 
 void forceDeleteAccount(UserInfo info)
 {
-	std::unordered_map<std::string, UserInfo> newMap;
 	mutex.lock();
 	SimpleDir::deleteResource("user_info/" + info.username + "_PMDatabase.json");
-	for(auto& tokenPair : accessTokens)
+	for(auto it=accessTokens.begin(); it != accessTokens.end();)
 	{
-		if(tokenPair.second.username == info.username)
+		if(it->second.username == info.username)
 		{
-			if(tokenPair.second.userDatabase != nullptr)
+			if(it->second.userDatabase != nullptr)
 			{
-				delete tokenPair.second.userDatabase;
-				tokenPair.second.userDatabase = nullptr;
+				delete it->second.userDatabase;
+				it->second.userDatabase = nullptr;
 			}
-		}
-		else
-		{
-			newMap.insert(tokenPair);
+			accessTokens.erase(it);
+			continue;
 		}
 
-		if(System::getCurrentTimeMillis() < tokenPair.second.expireTime)
-			newMap.insert(tokenPair);
+		if(System::getCurrentTimeMillis() > it->second.expireTime)
+		{
+			it = accessTokens.erase(it);
+			continue;
+		}
+
+		++it;
 	}
-	accessTokens = newMap;
 	mutex.unlock();
 }
 
-UserInfo checkIfAuthenticated(WebRequest& request)
+UserInfo checkIfAuthenticated(const WebRequest& request)
 {
 	UserInfo temp;
-	std::pair<std::string, std::string> token = request.getCookie("Access-Token");
-	if(token.second.empty())
+	auto token = request.getCookieMap().getCookie("Access-Token");
+	if(token == request.getCookieMap().end())
 		return {};
 	
 	mutex.lock();
-	auto it = accessTokens.find(token.second);
+	auto it = accessTokens.find(token->second.getValue());
 	if(it != accessTokens.end())
 	{
 		if(System::getCurrentTimeMillis() < it->second.expireTime)
 		{
 			temp = it->second;
+			updateTokenExpiration(it);
 		}
 	}
 	mutex.unlock();
 	
-	updateTokenExpiration(token.second);
 	return temp;
 }
 
 void cleanup()
 {
 	//remove tokens that have been expired
-	std::unordered_map<std::string, UserInfo> newMap;
 	mutex.lock();
-	for(auto& tokenPair : accessTokens)
+	for(auto it = accessTokens.begin(); it != accessTokens.end();)
 	{
-		if(System::getCurrentTimeMillis() < tokenPair.second.expireTime)
-			newMap.insert(tokenPair);
-		else
+		if(System::getCurrentTimeMillis() > it->second.expireTime)
 		{
-			if(tokenPair.second.userDatabase != nullptr)
+			if(it->second.userDatabase != nullptr)
 			{
-				delete tokenPair.second.userDatabase;
-				tokenPair.second.userDatabase = nullptr;
+				delete it->second.userDatabase;
+				it->second.userDatabase = nullptr;
 			}
+			it = accessTokens.erase(it);
 		}
+		else
+			++it;
 	}
-	accessTokens = newMap;
 	mutex.unlock();
 }
 
-bool send401Error(HttpServer* server, WebRequest& req, size_t id)
+bool send401Error(HttpServer* server, const WebRequest& req, const size_t id)
 {
     WebRequest resp;
     resp.setHeader(WebRequest::TYPE_SERVER, "HTTP/1.1 401 Unauthorized", false);
@@ -264,23 +257,30 @@ bool send401Error(HttpServer* server, WebRequest& req, size_t id)
     return (err == resp.getBytesInRequest());
 }
 
-void responseHandler(HttpServer* server, WebRequest& request, size_t requesterID, WebRequest& response)
+void responseHandler(HttpServer* server, const WebRequest& request, const std::string ip, const size_t requesterID, WebRequest& response)
 {
     //send back the required Access cookie and update its expiration time on both the server and user
-	std::pair<std::string, std::string> token = request.getCookie("Access-Token");
+	auto tokenIT = request.getCookieMap().getCookie("Access-Token");
+	std::string tokenString = "";
+	if(tokenIT != request.getCookieMap().end())
+		tokenString = tokenIT->second.getValue();
+
 	UserInfo requesterInfo = checkIfAuthenticated(request);
 	if(requesterInfo.userDatabase != nullptr)
 	{
 		//send cookie back to user
-		response.addKeyValue("Set-Cookie", "Access-Token=" + token.second + "; HttpOnly; " + secureOption); //TODO: remember to add Secure; Must be HTTPS for it to work
+		response.addKeyValue("Set-Cookie", "Access-Token=" + tokenString + "; HttpOnly; " + secureOption); //TODO: remember to add Secure; Must be HTTPS for it to work
 	}
 }
 
-bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<unsigned char>& bodyData, size_t requesterID)
+char postRequestHandler(HttpServer* server, const WebRequest& request, const std::vector<unsigned char>& bodyData, const std::string ip, const size_t requesterID)
 {
     std::string s = StringTools::toLowercase(request.getUrl());
 	UserInfo requesterInfo = checkIfAuthenticated(request);
-	std::string token = request.getCookie("Access-Token").second;
+	std::string token = "";
+	auto tokenIT = request.getCookieMap().getCookie("Access-Token");
+	if(tokenIT != request.getCookieMap().end())
+		token = tokenIT->second.getValue();
 
 	if(s == "/api/login")
 	{
@@ -295,8 +295,18 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		std::string body = "{\"status\": \"Failed\"}";
 
 		std::string userStr, passStr;
-		SimpleJSON json = SimpleJSON();
-		bool loadWithoutError = json.load(bodyData.data(), bodyData.size());
+		SimpleJSON json;
+		bool loadWithoutError = false;
+		try
+		{
+			json = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
+		
 		if(loadWithoutError)
 		{
 			auto userPair = json.getNodesPattern({"Username"});
@@ -360,10 +370,11 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send cookie back to user
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+		
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
 	else if(s == "/api/create_account")
 	{
@@ -373,11 +384,21 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
         response.setHeader(WebRequest::TYPE_SERVER, "HTTP/1.1 200 OK", false);
         server->fillGetResponseHeaders(response);
 		std::string body = "{\"status\": \"Failed\"}";
+		
+		SimpleJSON inputJSON;
+		bool loadWithoutError = false;
+		try
+		{
+			inputJSON = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
 
-		SimpleJSON inputJSON = SimpleJSON();
-		bool successfulLoad = inputJSON.load(bodyData.data(), bodyData.size());
 		int createErr = -4;
-		if(successfulLoad)
+		if(loadWithoutError)
 		{
 			auto usernameData = inputJSON.getNodesPattern({"Username"});
 			auto passwordData = inputJSON.getNodesPattern({"Password"});
@@ -398,10 +419,12 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+		
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
+		
 	}
 	else if(s == "/api/logout")
 	{
@@ -418,9 +441,9 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
         return err;
 	}
 	else if(s == "/api/delete_account")
@@ -438,10 +461,10 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
 	else if(s == "/api/add_entry")
 	{
@@ -456,9 +479,18 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
         server->fillGetResponseHeaders(response);
 		std::string body = "{\"status\": \"Failed\"}";
 
-		SimpleJSON inputJSON = SimpleJSON();
-		bool successfulLoad = inputJSON.load(bodyData.data(), bodyData.size());
-		if(successfulLoad)
+		SimpleJSON inputJSON;
+		bool loadWithoutError = false;
+		try
+		{
+			inputJSON = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
+		if(loadWithoutError)
 		{
 			PMInfo newPMInfo;
 			auto nameDataVector = inputJSON.getNodesPattern({"Name"});
@@ -496,10 +528,10 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
 	else if(s == "/api/delete_entry")
 	{
@@ -513,9 +545,18 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
         server->fillGetResponseHeaders(response);
 		std::string body = "{\"status\": \"Failed\"}";
 
-		SimpleJSON inputJSON = SimpleJSON();
-		bool successfulLoad = inputJSON.load(bodyData.data(), bodyData.size());
-		if(successfulLoad)
+		SimpleJSON inputJSON;
+		bool loadWithoutError = false;
+		try
+		{
+			inputJSON = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
+		if(loadWithoutError)
 		{
 			std::string nameStr;
 			auto nameDataVector = inputJSON.getNodesPattern({"Name"});
@@ -533,10 +574,10 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
 	else if(s == "/api/import_entries")
 	{
@@ -551,15 +592,24 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
         server->fillGetResponseHeaders(response);
 		std::string body = "{\"status\": \"Failed\"}";
 
-		SimpleJSON inputJSON = SimpleJSON();
-		bool successfulLoad = inputJSON.load(bodyData.data(), bodyData.size());
-		if(successfulLoad)
+		SimpleJSON inputJSON;
+		bool loadWithoutError = false;
+		try
+		{
+			inputJSON = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
+		if(loadWithoutError)
 		{
 			JArray* entryArr = nullptr;
 			auto allEntries = inputJSON.getNodesPattern({"Entries"});
 			if(allEntries.size() > 0)
 			{
-				if(allEntries.front()->getType() == SimpleJSON::TYPE_ARRAY)
+				if(allEntries.front()->getType() == JArray::TYPE)
 				{
 					entryArr = (JArray*)allEntries.front();
 				}
@@ -608,10 +658,10 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
 	else if(s == "/api/change_password")
 	{
@@ -625,9 +675,18 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
         server->fillGetResponseHeaders(response);
 		std::string body = "{\"status\": \"Failed\"}";
 
-		SimpleJSON inputJSON = SimpleJSON();
-		bool successfulLoad = inputJSON.load(bodyData.data(), bodyData.size());
-		if(successfulLoad)
+		SimpleJSON inputJSON;
+		bool loadWithoutError = false;
+		try
+		{
+			inputJSON = SimpleJSON((unsigned char*)bodyData.data(), bodyData.size());
+			loadWithoutError = true;
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << e.what() << '\n';
+		}
+		if(loadWithoutError)
 		{
 			std::string oldPassStr, newPassStr;
 			auto oldPasswordData = inputJSON.getNodesPattern({"OldPassword"});
@@ -660,15 +719,15 @@ bool postRequestHandler(HttpServer* server, WebRequest& request, std::vector<uns
 		//send response
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
-    return false;
+    return HttpServer::STATUS_ERROR;
 }
 
-bool getRequestHandler(HttpServer* server, WebRequest& request, std::vector<unsigned char>& bodyData, size_t requesterID)
+char getRequestHandler(HttpServer* server, const WebRequest& request, const std::vector<unsigned char>& bodyData, const std::string ip, const size_t requesterID)
 {
     std::string s = StringTools::toLowercase(request.getUrl());
 	UserInfo requesterInfo = checkIfAuthenticated(request);
@@ -690,10 +749,10 @@ bool getRequestHandler(HttpServer* server, WebRequest& request, std::vector<unsi
         server->fillGetResponseHeaders(response);
         response.addKeyValue("Content-Length", StringTools::toString(body.size()));
         response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-        bool err = server->sendResponse(response, requesterID, request) <= 0;
+        bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
         if(!err)
-            err = server->sendMessage(body, requesterID) <= 0;
-        return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
     }
 	else if(s == "/api/get_user_info")
 	{
@@ -710,10 +769,10 @@ bool getRequestHandler(HttpServer* server, WebRequest& request, std::vector<unsi
 		server->fillGetResponseHeaders(response);
 		response.addKeyValue("Content-Length", StringTools::toString(body.size()));
 		response.addKeyValue("Content-Type", WebRequest::getMimeTypeFromExt(".json"));
-		bool err = server->sendResponse(response, requesterID, request) <= 0;
+		bool err = server->sendResponse(response, ip, requesterID, request) <= 0;
 		if(!err)
-			err = server->sendMessage(body, requesterID) <= 0;
-		return err;
+            err = server->staggeredSend(requesterID, (unsigned char*)body.c_str(), 0, body.size()-1) != HttpServer::STATUS_DONE;
+        return (err) ? HttpServer::STATUS_ERROR : HttpServer::STATUS_DONE;
 	}
     else
     {
@@ -721,7 +780,7 @@ bool getRequestHandler(HttpServer* server, WebRequest& request, std::vector<unsi
 		File fullFilename = s;
 		if(fullFilename.getPath().empty() || fullFilename.getPath() == "./" || fullFilename.getPath() == "/")
 		{
-        	return server->defaultGetFunction(request, requesterID);
+        	return server->defaultGetFunction(request, ip, requesterID);
 		}
 		return send401Error(server, request, requesterID);
     }
@@ -744,14 +803,38 @@ void readConfigFile(NetworkConfig& netConfigRef, int& threadsForServer, std::str
 	IniFile initConfigFile = IniFile();
 	if(initConfigFile.load("config.ini"))
 	{
-		std::string s = initConfigFile.readValue("SERVER", "Threads");
-		threadsForServer = StringTools::toInt(initConfigFile.readValue("SERVER", "Threads"));
-		netConfigRef.location = initConfigFile.readValue("SERVER", "Server_Location");
-		netConfigRef.amountOfConnectionsAllowed = StringTools::toInt(initConfigFile.readValue("SERVER", "Connections_Allowed"));
-		netConfigRef.port = StringTools::toInt(initConfigFile.readValue("SERVER", "Port"));
+		auto it = initConfigFile.find("server");
+		if(it != initConfigFile.end())
+		{
+			auto it2 = it->find("threads");
+			if(it2 != it->end())
+				threadsForServer = StringTools::toInt(it2->value);
+			
+			it2 = it->find("server_location");
+			if(it2 != it->end())
+				netConfigRef.location = it2->value;
 
-		certFileRef = initConfigFile.readValue("HTTPS", "Certificate");
-		keyFileRef = initConfigFile.readValue("HTTPS", "Key");
+			it2 = it->find("connections_allowed");
+			if(it2 != it->end())
+				netConfigRef.amountOfConnectionsAllowed = StringTools::toInt(it2->value);
+			
+			it2 = it->find("port");
+			if(it2 != it->end())
+				netConfigRef.port = StringTools::toInt(it2->value);
+			
+		}
+		
+		it = initConfigFile.find("https");
+		if(it != initConfigFile.end())
+		{
+			auto it2 = it->find("certificate");
+			if(it2 != it->end())
+				certFileRef = it2->value;
+			
+			it2 = it->find("key");
+			if(it2 != it->end())
+				keyFileRef = it2->value;
+		}
 		
 		if(!certFileRef.empty() && !keyFileRef.empty())
 			netConfigRef.secure = true;
@@ -821,16 +904,17 @@ int main(int argc, char** argv)
 
     HttpServer server = HttpServer(config, threadsForServer, config.secure, certFile, keyFile);
     server.setAllowPersistentConnection(false);
-    server.setPostFuncMapper([](HttpServer* server, WebRequest& request, std::vector<unsigned char>& bodyData, size_t requesterID) ->bool{
-        return postRequestHandler(server, request, bodyData, requesterID);
+    server.setPostFuncMapper([](HttpServer* server, const WebRequest& request, const std::vector<unsigned char>& bodyData, const std::string ip, const size_t requesterID) ->char{
+        return postRequestHandler(server, request, bodyData, ip, requesterID);
     });
-    server.setGetFuncMapper([](HttpServer* server, WebRequest& request, std::vector<unsigned char>& bodyData, size_t requesterID) ->bool{
-        return getRequestHandler(server, request, bodyData, requesterID);
+    server.setGetFuncMapper([](HttpServer* server, const WebRequest& request, const std::vector<unsigned char>& bodyData, const std::string ip, const size_t requesterID) ->char{
+        return getRequestHandler(server, request, bodyData, ip, requesterID);
     });
-	server.setResponseHandlerFuncMapper([](HttpServer* server, WebRequest& request, size_t requesterID, WebRequest& response) ->void{
-		responseHandler(server, request, requesterID, response);
+	server.setResponseHandlerFuncMapper([](HttpServer* server, const WebRequest& request, const std::string ip, const size_t requesterID, WebRequest& response) ->void{
+		responseHandler(server, request, ip, requesterID, response);
 	});
 
+	server.setLogInfo(true);
     System::mapInteruptSignal(closeInterrupt);
     server.start();
 	size_t nextCleanupTime = System::getCurrentTimeMillis() + TOKEN_EXPIRE_TIME;
